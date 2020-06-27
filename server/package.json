@@ -1,0 +1,22 @@
+{
+	"name": "cpe",
+	"version": "1.0.0",
+	"description": "cpe website to load cpe credits",
+	"main": "index.js",
+	"scripts": {
+		"server": "nodemon server"
+	},
+	"author": "",
+	"license": "ISC",
+	"dependencies": {
+		"body-parser": "^1.19.0",
+		"concurrently": "^5.2.0",
+		"config": "^3.3.1",
+		"express": "^4.17.1",
+		"express-validator": "^6.6.0",
+		"mongoose": "^5.9.20",
+		"nodemon": "^2.0.4",
+		"passport": "^0.4.1",
+		"puppeteer": "^4.0.1"
+	}
+}
