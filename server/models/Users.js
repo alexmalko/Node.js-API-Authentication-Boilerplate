@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 // creating a schema for the user in the database
-const ItemSchema = new mongoose.Schema({
+const UserSchema = new mongoose.Schema({
 	name: {
 		type: String,
 		required: true
@@ -15,13 +15,10 @@ const ItemSchema = new mongoose.Schema({
 		type: String,
 		required: true
 	},
-	avatar: {
-		type: String
-	},
 	date: {
 		type: Date,
 		default: Date.now
 	}
 });
 
-module.exports = mongoose.model('items', ItemSchema);
+module.exports = mongoose.model('user', UserSchema);
