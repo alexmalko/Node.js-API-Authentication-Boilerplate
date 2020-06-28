@@ -6,9 +6,36 @@ const bcrypt = require('bcryptjs'); //to encrypt the user
 const jwt = require('jsonwebtoken'); //Jason Web Token for auth
 const auth = require('../middleware/auth'); //brining in custom middleware
 
+// @route GET /api/users
+// @ desc get all users
+// @access Public
+router.get('/', async (req, res) => {
+	try {
+		const item = await User.find();
+		res.json(item);
+	} catch (err) {
+		console.error(err.message);
+		res.status(500).send({ message: 'failed to Post' });
+	}
+});
+
+// @route DELETE /api/users
+// @ desc delete  user
+// Delete
+router.delete('/:id', auth, async (req, res) => {
+	try {
+		const deletedItem = await User.findById(req.params.id);
+		await deletedItem.remove();
+		res.json({ msg: 'Item removed', item: deletedItem });
+	} catch (err) {
+		console.error(err.message);
+		res.status(500).send({ message: 'invalid ID' });
+	}
+});
+
 // @route POST /api/login
-// @ desc Login user with Validation check & hased user
-// Create
+// @ desc Authenticate user & get token
+// @access   Public
 router.post(
 	'/',
 	// Validator
@@ -47,15 +74,17 @@ router.post(
 
 			// res.send('success');
 
-			//generating JWT for auth
+			// Jasonwebtoken authentication
 			const payload = {
 				user: {
 					id: user.id
 				}
 			};
 
-			const token = jwt.sign(payload, process.env.JWT_TOKEN, { expiresIn: '5 days' });
-			res.header('auth-token', token).send(token);
+			jwt.sign(payload, process.env.JWT_TOKEN, { expiresIn: '5 days' }, (err, token) => {
+				if (err) throw err;
+				res.json({ token });
+			});
 			//generating JWT for auth
 		} catch (err) {
 			console.error(err.message);
@@ -63,12 +92,5 @@ router.post(
 		}
 	}
 );
-
-// @route GET /api/login/secret
-// @ desc Example of the private route
-// @access Private
-router.get('/secret', auth, (req, res) => {
-	res.send(req.user);
-});
 
 module.exports = router;

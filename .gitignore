@@ -1,7 +1,5 @@
 node_modules/
 
-
 #Delete before pushing to Heroku
-/server/config
-
-.env.development
+config/
+.env

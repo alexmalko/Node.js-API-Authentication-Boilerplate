@@ -2,101 +2,217 @@ const express = require('express');
 const router = express.Router();
 const { check, validationResult } = require('express-validator'); //validator
 const Posts = require('../models/Posts'); //bring in Users model
-const bcrypt = require('bcryptjs'); //to encrypt the user
+const Users = require('../models/Users'); //bring in Users model
 const auth = require('../middleware/auth'); //brining in custom middleware
+const checkObjectId = require('../middleware/checkObjectid'); // middleware to
 
-// @route GET /api/posts
-// @ desc get posts
-// @access Public
-router.get('/', async (req, res) => {
-	try {
-		const item = await Posts.find();
-		res.json(item);
-	} catch (err) {
-		console.error(err.message);
-		res.status(500).send({ message: 'failed to Post' });
-	}
-});
-
-// @route POST /api/posts
-// @ desc post posts with Validation check & hased user
-// Create
+// @route    POST api/posts
+// @desc     Create a post
+// @access   Private
 router.post(
 	'/',
-	// Validator
+	// validator
 	[
-		check('name', 'Name is required').not().isEmpty(),
-		check('email', 'Please include a valid email').isEmail(),
-		check('password', 'Please enter a password with 6 or more characters').isLength({ min: 6 })
+		auth,
+		//
+		[ check('text', 'Text is required').not().isEmpty() ]
 	],
 	async (req, res) => {
 		const errors = validationResult(req);
 		if (!errors.isEmpty()) {
 			return res.status(400).json({ errors: errors.array() });
 		}
-		// Validator
-
-		const { name, email, password } = req.body; //destructuring request
+		// validator
 
 		try {
-			// check if user already exists
-			let user = await Posts.findOne({ email });
-			if (user) {
-				return res.status(400).json({ errors: [ { msg: 'User already exists' } ] });
-			}
-			// check if user already exists
+			const user = await Users.findById(req.user.id).select('-password');
 
-			//encrypting the user before saving user into the DB
-			const salt = await bcrypt.genSalt(10); //creating a salt
-			const hashedPassword = await bcrypt.hash(password, salt); //hashing the password
-
-			// saving User into the database
-			const newItem = new Posts({
-				name: name,
-				password: hashedPassword,
-				email: email
+			const newPost = new Posts({
+				text: req.body.text,
+				name: user.name,
+				user: req.user.id
 			});
-			const item = await newItem.save();
-			res.json(item);
-			// saving User into the database
+
+			const post = await newPost.save();
+
+			res.json(post);
 		} catch (err) {
 			console.error(err.message);
-			res.status(500).send({ message: 'failed to Post' });
+			res.status(500).send('Server Error');
 		}
 	}
 );
 
-// @route DELETE /api/posts
-// @ desc delete  posts
-// Delete
-router.delete('/:id', async (req, res) => {
+// @route    GET api/posts
+// @desc     Get all posts
+// @access   Private
+router.get('/', auth, async (req, res) => {
 	try {
-		const deletedItem = await Posts.findById(req.params.id);
-		await deletedItem.remove();
-		res.json({ msg: 'Item removed', item: deletedItem });
+		const posts = await Posts.find().sort({ date: -1 });
+		res.json(posts);
 	} catch (err) {
 		console.error(err.message);
-		res.status(500).send({ message: 'invalid ID' });
+		res.status(500).send('Server Error');
 	}
 });
 
-// @route Patch /api/posts
-// @ desc update posts
-// Update
-router.patch('/:id', async (req, res) => {
+// @route    GET api/posts/:id
+// @desc     Get post by ID
+// @access   Private
+router.get('/:id', [ auth, checkObjectId('id') ], async (req, res) => {
 	try {
-		const updatedItem = await Posts.updateOne(
-			{ _id: req.params.id },
-			{
-				$set: {
-					name: req.body.name
-				}
-			}
-		);
-		res.json({ msg: 'Item updated', item: updatedItem });
+		const post = await Posts.findById(req.params.id);
+
+		res.json(post);
 	} catch (err) {
 		console.error(err.message);
-		res.status(500).send({ message: 'invalid ID' });
+
+		res.status(500).send('Server Error');
+	}
+});
+
+// @route    DELETE api/posts/:id
+// @desc     Delete a post
+// @access   Private
+router.delete('/:id', [ auth, checkObjectId('id') ], async (req, res) => {
+	try {
+		const post = await Posts.findById(req.params.id);
+
+		// Check user
+		if (post.user.toString() !== req.user.id) {
+			return res.status(401).json({ msg: 'User not authorized' });
+		}
+
+		await post.remove();
+
+		res.json({ msg: 'Post removed' });
+	} catch (err) {
+		console.error(err.message);
+
+		res.status(500).send('Server Error');
+	}
+});
+
+// @route    PUT api/posts/like/:id
+// @desc     Like a post
+// @access   Private
+router.put(
+	'/like/:id',
+	[
+		auth,
+		// check if id is an object
+		checkObjectId('id')
+	],
+	async (req, res) => {
+		try {
+			const post = await Posts.findById(req.params.id);
+
+			// Check if the post has already been liked
+			if (post.likes.some((like) => like.user.toString() === req.user.id)) {
+				return res.status(400).json({ msg: 'Post already liked' });
+			}
+
+			post.likes.unshift({ user: req.user.id });
+
+			await post.save();
+
+			return res.json(post.likes);
+		} catch (err) {
+			console.error(err.message);
+			res.status(500).send('Server Error');
+		}
+	}
+);
+
+// @route    PUT api/posts/unlike/:id
+// @desc     Unlike a post
+// @access   Private
+router.put('/unlike/:id', [ auth, checkObjectId('id') ], async (req, res) => {
+	try {
+		const post = await Posts.findById(req.params.id);
+
+		// Check if the post has not yet been liked
+		if (!post.likes.some((like) => like.user.toString() === req.user.id)) {
+			return res.status(400).json({ msg: 'Post has not yet been liked' });
+		}
+
+		// remove the like
+		post.likes = post.likes.filter(({ user }) => user.toString() !== req.user.id);
+
+		await post.save();
+
+		return res.json(post.likes);
+	} catch (err) {
+		console.error(err.message);
+		res.status(500).send('Server Error');
+	}
+});
+
+// @route    POST api/posts/comment/:id
+// @desc     Comment on a post
+// @access   Private
+router.post(
+	'/comment/:id',
+	[
+		auth,
+		checkObjectId('id'),
+		// require a text for comment
+		[ check('text', 'Text is required').not().isEmpty() ]
+	],
+	async (req, res) => {
+		const errors = validationResult(req);
+		if (!errors.isEmpty()) {
+			return res.status(400).json({ errors: errors.array() });
+		}
+
+		try {
+			const user = await Users.findById(req.user.id).select('-password');
+			const post = await Posts.findById(req.params.id);
+
+			const newComment = {
+				text: req.body.text,
+				name: user.name,
+				user: req.user.id
+			};
+
+			post.comments.unshift(newComment);
+
+			await post.save();
+
+			res.json(post.comments);
+		} catch (err) {
+			console.error(err.message);
+			res.status(500).send('Server Error');
+		}
+	}
+);
+
+// @route    DELETE api/posts/comment/:id/:comment_id
+// @desc     Delete comment
+// @access   Private
+router.delete('/comment/:id/:comment_id', auth, async (req, res) => {
+	try {
+		const post = await Posts.findById(req.params.id);
+
+		// Pull out comment
+		const comment = post.comments.find((comment) => comment.id === req.params.comment_id);
+		// Make sure comment exists
+		if (!comment) {
+			return res.status(404).json({ msg: 'Comment does not exist' });
+		}
+		// Check user
+		if (comment.user.toString() !== req.user.id) {
+			return res.status(401).json({ msg: 'User not authorized' });
+		}
+
+		post.comments = post.comments.filter(({ id }) => id !== req.params.comment_id);
+
+		await post.save();
+
+		return res.json(post.comments);
+	} catch (err) {
+		console.error(err.message);
+		return res.status(500).send('Server Error');
 	}
 });
 

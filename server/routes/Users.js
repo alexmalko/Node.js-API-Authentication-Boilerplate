@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { check, validationResult } = require('express-validator'); //validator
 const Users = require('../models/Users'); //bring in Users model
+const jwt = require('jsonwebtoken'); //Jason Web Token for auth
 const bcrypt = require('bcryptjs'); //to encrypt the user
 
 // @route    POST api/users
@@ -37,14 +38,26 @@ router.post(
 			const hashedPassword = await bcrypt.hash(password, salt); //hashing the password
 
 			// saving User into the database
-			const newItem = new Users({
+			user = new Users({
 				name: name,
 				password: hashedPassword,
 				email: email
 			});
-			const item = await newItem.save();
-			res.json(item);
+			await user.save();
+			// res.json(item);
 			// saving User into the database
+
+			// Jasonwebtoken authentication
+			const payload = {
+				user: {
+					id: user.id
+				}
+			};
+
+			jwt.sign(payload, process.env.JWT_TOKEN, { expiresIn: '5 days' }, (err, token) => {
+				if (err) throw err;
+				res.json({ token });
+			});
 		} catch (err) {
 			console.error(err.message);
 			res.status(500).send({ message: 'failed to Post' });
@@ -52,50 +65,4 @@ router.post(
 	}
 );
 
-// @route GET /api/users
-// @ desc get all users
-// @access Public
-router.get('/', async (req, res) => {
-	try {
-		const item = await Users.find();
-		res.json(item);
-	} catch (err) {
-		console.error(err.message);
-		res.status(500).send({ message: 'failed to Post' });
-	}
-});
-
-// @route DELETE /api/users
-// @ desc delete  user
-// Delete
-router.delete('/:id', async (req, res) => {
-	try {
-		const deletedItem = await Users.findById(req.params.id);
-		await deletedItem.remove();
-		res.json({ msg: 'Item removed', item: deletedItem });
-	} catch (err) {
-		console.error(err.message);
-		res.status(500).send({ message: 'invalid ID' });
-	}
-});
-
-// @route Patch /api/users
-// @ desc update user
-// Update
-router.patch('/:id', async (req, res) => {
-	try {
-		const updatedItem = await Users.updateOne(
-			{ _id: req.params.id },
-			{
-				$set: {
-					name: req.body.name
-				}
-			}
-		);
-		res.json({ msg: 'Item updated', item: updatedItem });
-	} catch (err) {
-		console.error(err.message);
-		res.status(500).send({ message: 'invalid ID' });
-	}
-});
 module.exports = router;
